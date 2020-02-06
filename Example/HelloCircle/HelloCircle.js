@@ -37,6 +37,15 @@ var twicePi=2.0*3.14159;
 var frameNumber =0;
     
 //----------------------------------------------------------------------------------
+
+function deformSin(x, y, angle) {
+  var circPt = glMatrix.vec2.fromValues(x, y);
+  var dist = 0.2 * Math.sin((angle)+ degToRad(defAngle));
+  glMatrix.vec2.normalize(circPt, circPt);
+  glMatrix.vec2.scale(circPt, circPt, dist);
+  return circPt;
+}
+
 /**
  * Sends projection/modelview matrices to shader
  */
@@ -51,7 +60,7 @@ function setMatrixUniforms() {
  * @return {Number} The radians that correspond to the degree input
  */
 function degToRad(degrees) {
-        return degrees * Math.PI / 180;
+    return degrees * Math.PI / 180;
 }
 
 
@@ -170,6 +179,12 @@ function loadVertices(numVertices) {
       angle = i *  twicePi / numVertices;
       x=(radius * Math.cos(angle));
       y=(radius * Math.sin(angle));
+
+      // Call deformSin
+      deformed_val = deformSin(x, y, angle);
+      x += deformed_val[0];
+      y += deformed_val[1];
+
       triangleVertices.push(x);
       triangleVertices.push(y);
       triangleVertices.push(z);
@@ -247,6 +262,8 @@ function draw() {
  */
 function animate() { 
     defAngle= (defAngle+1.0) % 360;
+    // Need to load again
+    loadVertices(numCircleVerts);
 }
 
 /**
