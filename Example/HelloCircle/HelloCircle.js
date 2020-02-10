@@ -261,6 +261,7 @@ function draw() {
  * Animation to be called from tick. Updates globals and performs animation for each tick.
  */
 function animate() { 
+    // update global variable 
     defAngle= (defAngle+1.0) % 360;
     // Need to load again
     loadVertices(numCircleVerts);
