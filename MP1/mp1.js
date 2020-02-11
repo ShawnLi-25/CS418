@@ -500,10 +500,10 @@ function draw() {
   glMatrix.mat4.identity(mvMatrix); //model-view matrix
   glMatrix.mat4.identity(pMatrix);  //perspective matrix
   
-  if(frameNumber >= 1000) {
-    if(fieldOfView <= 125)
-      fieldOfView += 0.01;     
-  }
+  // if(frameNumber >= 1000) {
+  //   if(fieldOfView <= 125)
+  //     fieldOfView += 0.01;     
+  // }
 
   const fOV = fieldOfView * Math.PI / 180;
   const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
@@ -516,7 +516,7 @@ function draw() {
 
   glMatrix.mat4.translate(mvMatrix, mvMatrix, translateVec);
 
-  if(btnStatus == "btn_dancing" && frameNumber < 800 || btnStatus == "btn_diy")
+  if(btnStatus == "btn_dancing" && frameNumber < 200 || btnStatus == "btn_diy")
     glMatrix.mat4.rotate(mvMatrix, mvMatrix, squareRotation, [0, 1, 0]);
   
   glMatrix.mat4.scale(mvMatrix, mvMatrix, scaleVec);
@@ -546,6 +546,7 @@ function animate() {
       if(lastStatus == "btn_diy") {
         setupDancingBuffers();
         frameNumber = 0;
+        angle = 0;
         translateVecX = 0.0;
         translateVecY = 0.0;
         translateVecZ = -3.0;
@@ -554,22 +555,22 @@ function animate() {
 
       // nonUniTransform();
 
-      if(frameNumber < 200) {
-        translateVecX += 0.005;
-        translateVecY += 0.005;
-        translateVecZ -= 0.025;
-      } else if(frameNumber >= 200 && frameNumber < 400) {
-        translateVecX -= 0.005;
-        translateVecY -= 0.005;
+      if(frameNumber < 100) {
+        translateVecX += 0.01;
+        translateVecY += 0.01;
+        translateVecZ -= 0.03;
+      } else if(frameNumber >= 100 && frameNumber < 200) {
+        translateVecX -= 0.01;
+        translateVecY -= 0.01;
         translateVecZ += 0.02;
-      } else if(frameNumber >= 400 && frameNumber < 600) {
-        scaleVecX -= 0.003;
-        scaleVecY -= 0.003;
-      } else if(frameNumber >= 600 && frameNumber < 800) {
-        scaleVecX += 0.002;
-        scaleVecY += 0.002;
-      } else if(frameNumber >= 800) {
-        var temp = Math.floor((frameNumber - 800) / 120);
+      } else if(frameNumber >= 200 && frameNumber < 300) {
+        scaleVecX -= 0.005;
+        scaleVecY -= 0.005;
+      } else if(frameNumber >= 300 && frameNumber < 400) {
+        scaleVecX += 0.003;
+        scaleVecY += 0.003;
+      } else if(frameNumber >= 400) {
+        var temp = Math.floor((frameNumber -400) / 120);
         if(temp % 2 == 0)
           angle += 0.01;
         else
@@ -589,6 +590,7 @@ function animate() {
         translateVecX = 0.0;
         translateVecY = 0.0;
         translateVecZ = -3.0;
+        scaleVecX = scaleVecY = 1;
       }
       
     } else {
@@ -717,7 +719,14 @@ function initVertexBuffer() {
   ];
 }
 
+
+/**
+ * Initialize color value & direction set .
+ */
 function initColorValSet() {
+  
+  colorValSet = [];
+  colorDirSet = [];
 
   for(i = 0, itv = 0.0; i < numOfVerteces; ++i) {
     if(i % 3 == 0 && i != 0)
@@ -728,9 +737,12 @@ function initColorValSet() {
     colorValSet.push(1.0);
     colorDirSet.push(1);
   }
-  console.log("Size is", colorValSet.length);
+  // console.log("Size is", colorValSet.length);
 }
 
+/**
+ * Set gradient color change for triangles seperately.
+ */
 function setColorValSet() {
   for(i = 0; i < numOfVerteces; ++i) {
     var colorVal = colorValSet[4 * i];
@@ -752,6 +764,9 @@ function setColorValSet() {
   }
 }
 
+/**
+ * Onclick function to switch for radio button.
+ */
 function switchAnimate(btn) {
   var curID = btn.id;
   switch (curID) {
