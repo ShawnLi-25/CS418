@@ -551,6 +551,7 @@ function animate() {
         translateVecY = 0.0;
         translateVecZ = -3.0;
         scaleVecX = scaleVecY = 1;
+        squareRotation = 0;
       }
 
       // nonUniTransform();
