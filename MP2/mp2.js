@@ -39,13 +39,13 @@ var myTerrain;
 
 // View parameters
 /** @global Location of the camera in world coordinates */
-var eyePt = vec3.fromValues(0.2,0.1,0.4);
+var eyePt = vec3.fromValues(0.0, 0.2, 0.4);
 /** @global Direction of the view in world coordinates */
-var viewDir = vec3.fromValues(0.0,0.0,-1.0);
+var viewDir = vec3.fromValues(0.0, 0.0, -1.0);
 /** @global Up vector for view matrix creation, in world coordinates */
-var up = vec3.fromValues(0.0,1.0,0.0);
+var up = vec3.fromValues(0.0, 1.0, 0.0);
 /** @global Location of a point along viewDir in world coordinates */
-var viewPt = vec3.fromValues(0.0,0.0,0.0);
+var viewPt = vec3.fromValues(0.0, 0.0, 0.0);
 /** @global Near bound of the frustum */
 var zNear = 0.1;
 /** @global Far bound of the frustum, can be null or Infinity */
@@ -56,12 +56,15 @@ var fov = 36;
 //Light parameters
 /** @global Light position in VIEW coordinates */
 var lightPosition = [0,3,3];
+var lightPosition2 = [3,0,3];
+var lightPosition3 = [3,3,0];
+
 /** @global Ambient light color/intensity for Phong reflection */
 var lAmbient = [0,0,0];
 /** @global Diffuse light color/intensity for Phong reflection */
-var lDiffuse = [1,1,1];
+var lDiffuse = [0.6,0.6,0.6];
 /** @global Specular light color/intensity for Phong reflection */
-var lSpecular =[0,0,0];
+var lSpecular =[0.1,0.1,0.1];
 
 //Material parameters
 /** @global Ambient material color/intensity for Phong reflection */
@@ -289,8 +292,10 @@ function setMaterialUniforms(alpha,a,d,s) {
  * @param {Float32Array} d Diffuse light strength
  * @param {Float32Array} s Specular light strength
  */
-function setLightUniforms(loc,a,d,s) {
-  gl.uniform3fv(shaderProgram.uniformLightPositionLoc, loc);
+function setLightUniforms(loc1, loc2, loc3, a, d, s) {
+  gl.uniform3fv(shaderProgram.uniformLightPositionLoc[0], loc1);
+  gl.uniform3fv(shaderProgram.uniformLightPositionLoc[1], loc2);
+  gl.uniform3fv(shaderProgram.uniformLightPositionLoc[2], loc3);
   gl.uniform3fv(shaderProgram.uniformAmbientLightColorLoc, a);
   gl.uniform3fv(shaderProgram.uniformDiffuseLightColorLoc, d);
   gl.uniform3fv(shaderProgram.uniformSpecularLightColorLoc, s);
@@ -316,10 +321,9 @@ function draw() {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // We'll use perspective 
-    mat4.perspective(pMatrix,degToRad(fov), 
-                     gl.viewportWidth / gl.viewportHeight,
-                     zNear, zFar);
+    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    // Perspective Transform 
+    mat4.perspective(pMatrix,degToRad(fov), aspect, zNear, zFar);
 
     // We want to look down -z, so create a lookat point in that direction    
     vec3.add(viewPt, eyePt, viewDir);
@@ -333,7 +337,7 @@ function draw() {
     mat4.rotateY(mvMatrix, mvMatrix, degToRad(viewRot));
     mat4.rotateX(mvMatrix, mvMatrix, degToRad(-75));
     setMatrixUniforms();
-    setLightUniforms(lightPosition,lAmbient,lDiffuse,lSpecular);
+    setLightUniforms(lightPosition, lightPosition2, lightPosition3, lAmbient, lDiffuse, lSpecular);
     
     if ((document.getElementById("polygon").checked))
     { 

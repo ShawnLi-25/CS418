@@ -202,19 +202,19 @@ class Terrain {
     */
     setColorMap() {
         for(let i = 0; i < this.numVertices; ++i) {
-            if(this.vBuffer[3*i + 2] > 0.06) {
+            if(this.vBuffer[3*i + 2] > 0.05) {
                 this.cBuffer.push(pink[0]);
                 this.cBuffer.push(pink[1]);
                 this.cBuffer.push(pink[2]);
-            } else if(this.vBuffer[3*i + 2] > 0.03 && this.vBuffer[3*i + 2] <= 0.06) {
+            } else if(this.vBuffer[3*i + 2] > 0.02 && this.vBuffer[3*i + 2] <= 0.05) {
                 this.cBuffer.push(brown[0]);
                 this.cBuffer.push(brown[1]);
                 this.cBuffer.push(brown[2]);
-            } else if(this.vBuffer[3*i + 2] > -0.03 && this.vBuffer[3*i + 2] <= 0.03) {
+            } else if(this.vBuffer[3*i + 2] > -0.02 && this.vBuffer[3*i + 2] <= 0.02) {
                 this.cBuffer.push(green[0]);
                 this.cBuffer.push(green[1]);
                 this.cBuffer.push(green[2]);
-            } else if(this.vBuffer[3*i + 2] > -0.06 && this.vBuffer[3*i + 2] <= -0.03) {
+            } else if(this.vBuffer[3*i + 2] > -0.05 && this.vBuffer[3*i + 2] <= -0.02) {
                 this.cBuffer.push(purple[0]);
                 this.cBuffer.push(purple[1]);
                 this.cBuffer.push(purple[2]);
