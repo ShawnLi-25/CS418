@@ -20,11 +20,11 @@ class Terrain {
         this.maxX = maxX;
         this.maxY = maxY;
         
-        // Allocate vertex array
+        // Allocate vertex array  **len:(div + 1)^2** 
         this.vBuffer = [];
-        // Allocate triangle array
+        // Allocate triangle array  **len: 2*div^2 **
         this.fBuffer = [];
-        // Allocate normal array
+        // Allocate normal array  **len:(div + 1)^2**
         this.nBuffer = [];
         // Allocate array for edges so we can draw wireframe
         this.eBuffer = [];
@@ -38,6 +38,9 @@ class Terrain {
 
         this.generateRandomPlanes(100, 0.005);
         console.log("Terrain: Generated random planes");
+
+        this.generateNormals();
+        console.log("Terrain: Generated normal vectors");
         
         // Get extension for 4 byte integer indices for drwElements
         var ext = gl.getExtension('OES_element_index_uint');
@@ -53,10 +56,15 @@ class Terrain {
     * @param {number} j the jth column of vertices
     */
     setVertex(v,i,j) {
+        if(i < 0 || i > this.div || j < 0 || j > this.div) {
+            console.log("Terrain: setVertex index error!");
+            return false;
+        }
         let vid = (i * (this.div + 1) + j) * 3; //vBuffer stores (div + 1)^2 * 3 vertices
         this.vBuffer[vid] = v[0];
         this.vBuffer[vid + 1] = v[1];
-        this.vBuffer[vid + 2] = v[2];   
+        this.vBuffer[vid + 2] = v[2];
+        return true;         
     }
     
     /**
@@ -66,10 +74,27 @@ class Terrain {
     * @param {number} j the jth column of vertices
     */
     getVertex(v,i,j) {
+        if(i < 0 || i > this.div || j < 0 || j > this.div) {
+            console.log("Terrain: getVertex index error!");
+            return false;
+        }
         let vid = (i * (this.div + 1) + j) * 3;
         v[0] = this.vBuffer[vid];
         v[1] = this.vBuffer[vid + 1];
-        v[2] = this.vBuffer[vid + 2];        
+        v[2] = this.vBuffer[vid + 2];  
+        return true;      
+    }
+
+    /**
+    * Calculate vector 
+    * @param {Object} v an an array of length 3 holding x,y,z coordinates
+    * @param {number} i the ith row of vertices
+    * @param {number} j the jth column of vertices
+    */
+    subVector(res, v1, v2) {
+        for (let i = 0; i < 3; i++) {
+            res[i] = v1[i] - v2[i];
+        }
     }
     
     /**
@@ -168,7 +193,7 @@ class Terrain {
 
                 this.nBuffer.push(0);
                 this.nBuffer.push(0);
-                this.nBuffer.push(1);
+                this.nBuffer.push(1); //1 or 0?
             }
         }
 
@@ -246,7 +271,83 @@ class Terrain {
             }
         }
     }
-    
+
+
+    /**
+     * Generate(update) per-vertex normal vectors(Consider different cases!)
+    */  
+    generateNormals() {
+        for(let i = 0; i <= this.div; ++i) {
+            for(let j = 0; j <= this.div; ++j) {
+                //At most each vertex can connect to 6 vertices
+                var verticesPool = [];
+                //Order matters!!
+                var neighbours = [[i, j - 1], [i + 1, j - 1], [i + 1, j], [i, j + 1], [i - 1, j + 1], [i - 1, j]];
+
+                for(let k = 0; k < neighbours.length; ++k) {
+                    let v = vec3.create();
+                    if(this.getVertex(v, neighbours[k][0], neighbours[k][1])) {
+                        var verticePair = {
+                            "index": k,
+                            "value": v
+                        };
+                        verticesPool.push(verticePair);
+                    }
+                }
+
+                this.computerNormals(verticesPool, i, j);
+            }
+        }
+    }
+
+    /**
+     * Compute normal vectors based on neighbouring vertices
+     * @param {Array} nbrs List of valid neighbours of this vertex
+     * @param {number} i the ith row of vertices
+     * @param {number} j the jth column of vertices
+    */  
+    computerNormals(nbrs, i, j) {
+        let cur = vec3.create();
+        this.getVertex(cur, i, j);
+
+        let neighbourNum = nbrs.length;
+        let triangleNum = neighbourNum - 1;
+        
+        //Array of vector substract result
+        let vectorSubList = [];
+
+        for(let i = 0; i < neighbourNum; ++i) {
+            let subRes = vec3.create();
+            vec3.sub(subRes, nbrs[i].value, cur);
+            vectorSubList.push(subRes);
+        }
+
+        var sum = vec3.create();
+
+        for(let k = 0; k < neighbourNum; ++k) {
+            if(k < triangleNum && nbrs[k + 1].index - nbrs[k].index == 1) {
+                let crossProductRes = vec3.create();
+                vec3.cross(crossProductRes, vectorSubList[k], vectorSubList[k + 1]);
+                vec3.add(sum, sum, crossProductRes);
+            } else if(k == triangleNum && nbrs[k].index == 5 && nbrs[0].index == 0) {
+                let crossProductRes = vec3.create();
+                vec3.cross(crossProductRes, vectorSubList[k], vectorSubList[0]);
+                vec3.add(sum, sum, crossProductRes);
+            }   
+        }
+        
+        let res = vec3.create();
+        // Gotta divide in this way, can't sum / triangleNum
+        vec3.normalize(res, [sum[0] / triangleNum, sum[1] / triangleNum, sum[2] / triangleNum]);
+
+        // console.log(res[0] + ' ' + res[1] + ' ' + res[2]);
+
+        this.nBuffer[3 * ((this.div + 1) * i + j)] = res[0];
+        this.nBuffer[3 * ((this.div + 1) * i + j) + 1] = res[1];
+        this.nBuffer[3 * ((this.div + 1) * i + j) + 2] = res[2];
+    }
+
+
     /**
      * Print vertices and triangles to console for debugging
     */
@@ -254,16 +355,16 @@ class Terrain {
             
         for(var i = 0; i < this.numVertices; i++) 
         {
-            console.log("v ", this.vBuffer[i*3], " ", 
-                              this.vBuffer[i*3 + 1], " ",
-                              this.vBuffer[i*3 + 2], " ");               
+            console.log("vertex: ", this.vBuffer[i*3], " ", 
+                                    this.vBuffer[i*3 + 1], " ",
+                                    this.vBuffer[i*3 + 2], " ");               
         }
         
         for(var i = 0; i < this.numFaces; i++) 
         {
-            console.log("f ", this.fBuffer[i*3], " ", 
-                              this.fBuffer[i*3 + 1], " ",
-                              this.fBuffer[i*3 + 2], " ");
+            console.log("triangle: ", this.fBuffer[i*3], " ", 
+                                      this.fBuffer[i*3 + 1], " ",
+                                      this.fBuffer[i*3 + 2], " ");
         }
             
     }

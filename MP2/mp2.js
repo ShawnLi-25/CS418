@@ -1,4 +1,3 @@
-
 /**
  * @MP2-CS418: 3D Terrain Modeling 
  * @author Xiang Li <xiangl14@illinois.edu>  
@@ -26,7 +25,7 @@ var nMatrix = mat3.create();
 var mvMatrixStack = [];
 
 /** @global The angle of rotation around the y axis */
-var viewRot = 10;
+var viewRot = 5;
 
 /** @global A glmatrix vector to use for transformations */
 var transformVec = vec3.create();    
@@ -40,14 +39,18 @@ var myTerrain;
 
 // View parameters
 /** @global Location of the camera in world coordinates */
-var eyePt = vec3.fromValues(0.0,0.0,0.0);
+var eyePt = vec3.fromValues(0.2,0.1,0.4);
 /** @global Direction of the view in world coordinates */
 var viewDir = vec3.fromValues(0.0,0.0,-1.0);
 /** @global Up vector for view matrix creation, in world coordinates */
 var up = vec3.fromValues(0.0,1.0,0.0);
 /** @global Location of a point along viewDir in world coordinates */
 var viewPt = vec3.fromValues(0.0,0.0,0.0);
-/** @global fieldOfView */
+/** @global Near bound of the frustum */
+var zNear = 0.1;
+/** @global Far bound of the frustum, can be null or Infinity */
+var zFar = 200;
+/** @global FieldOfView */
 var fov = 45;
 
 //Light parameters
@@ -288,7 +291,7 @@ function setLightUniforms(loc,a,d,s) {
  * Populate buffers with data
  */
 function setupBuffers() {
-    myTerrain = new Terrain(64, -0.5, 0.5, -0.5, 0.5);
+    myTerrain = new Terrain(64, -0.64, 0.64, -0.64, 0.64);
     myTerrain.loadBuffers();
 }
 
@@ -304,8 +307,6 @@ function draw() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // We'll use perspective 
-    let zNear = 0.1;
-    let zFar = 100.0;
     mat4.perspective(pMatrix,degToRad(fov), 
                      gl.viewportWidth / gl.viewportHeight,
                      zNear, zFar);
@@ -324,7 +325,7 @@ function draw() {
     setMatrixUniforms();
     setLightUniforms(lightPosition,lAmbient,lDiffuse,lSpecular);
     
-    if ((document.getElementById("polygon").checked) || (document.getElementById("wirepoly").checked))
+    if ((document.getElementById("Blinn-Phong").checked) || (document.getElementById("wirepoly").checked))
     { 
       setMaterialUniforms(shininess,kAmbient,kTerrainDiffuse,kSpecular); 
       myTerrain.drawTriangles();
