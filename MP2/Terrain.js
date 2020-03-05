@@ -20,13 +20,15 @@ class Terrain {
         this.maxX = maxX;
         this.maxY = maxY;
         
-        // Allocate vertex array  **len:(div + 1)^2** 
+        // Allocate vertex array  -> len:(div + 1)^2 
         this.vBuffer = [];
-        // Allocate triangle array  **len: 2*div^2 **
+        // Allocate triangle array  -> len: 2*div^2 
         this.fBuffer = [];
-        // Allocate normal array  **len:(div + 1)^2**
+        // Allocate normal array  -> len:(div + 1)^2
         this.nBuffer = [];
-        // Allocate array for edges so we can draw wireframe
+        // Allocate array for color-map -> len:(div + 1)^2
+        this.cBuffer = [];
+        // Allocate array for edges so we can draw wireframe -> len: 6*div^2 
         this.eBuffer = [];
         console.log("Terrain: Allocated buffers");
         
@@ -36,11 +38,14 @@ class Terrain {
         this.generateLines();
         console.log("Terrain: Generated lines");
 
-        this.generateRandomPlanes(100, 0.005);
+        this.generateRandomPlanes(128, 0.005);
         console.log("Terrain: Generated random planes");
 
         this.generateNormals();
         console.log("Terrain: Generated normal vectors");
+
+        this.setColorMap();
+        console.log("Terrain: Set colormap");
         
         // Get extension for 4 byte integer indices for drwElements
         var ext = gl.getExtension('OES_element_index_uint');
@@ -117,6 +122,14 @@ class Terrain {
         this.VertexNormalBuffer.itemSize = 3;
         this.VertexNormalBuffer.numItems = this.numVertices;
         console.log("Loaded ", this.VertexNormalBuffer.numItems, " normals");
+
+        //Setup elevation-based color-map
+        this.ColorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.ColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.cBuffer),
+                  gl.STATIC_DRAW);
+        this.ColorBuffer.itemSize = 3;
+        this.ColorBuffer.numItems = this.numVertices;
     
         // Specify faces of the terrain 
         this.IndexTriBuffer = gl.createBuffer();
@@ -134,7 +147,7 @@ class Terrain {
                   gl.STATIC_DRAW);
         this.IndexEdgeBuffer.itemSize = 1;
         this.IndexEdgeBuffer.numItems = this.eBuffer.length;
-        
+
         console.log("triangulatedPlane: loadBuffers");
     }
     
@@ -143,15 +156,21 @@ class Terrain {
     */
     drawTriangles() {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.VertexPositionBuffer);
-        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, this.VertexPositionBuffer.itemSize, 
-                         gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, 
+                            this.VertexPositionBuffer.itemSize, 
+                            gl.FLOAT, false, 0, 0);
 
         // Bind normal buffer
         gl.bindBuffer(gl.ARRAY_BUFFER, this.VertexNormalBuffer);
         gl.vertexAttribPointer(shaderProgram.vertexNormalAttribute, 
                            this.VertexNormalBuffer.itemSize,
                            gl.FLOAT, false, 0, 0);   
-    
+        
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.ColorBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, 
+                           this.ColorBuffer.itemSize, 
+                           gl.FLOAT, false, 0, 0);
+
         //Draw 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.IndexTriBuffer);
         gl.drawElements(gl.TRIANGLES, this.IndexTriBuffer.numItems, gl.UNSIGNED_INT,0);
@@ -175,6 +194,36 @@ class Terrain {
         //Draw 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.IndexEdgeBuffer);
         gl.drawElements(gl.LINES, this.IndexEdgeBuffer.numItems, gl.UNSIGNED_INT,0);   
+    }
+
+    /**
+     * Set colorMap based on elevation
+     * could do better :)
+    */
+    setColorMap() {
+        for(let i = 0; i < this.numVertices; ++i) {
+            if(this.vBuffer[3*i + 2] > 0.06) {
+                this.cBuffer.push(pink[0]);
+                this.cBuffer.push(pink[1]);
+                this.cBuffer.push(pink[2]);
+            } else if(this.vBuffer[3*i + 2] > 0.03 && this.vBuffer[3*i + 2] <= 0.06) {
+                this.cBuffer.push(brown[0]);
+                this.cBuffer.push(brown[1]);
+                this.cBuffer.push(brown[2]);
+            } else if(this.vBuffer[3*i + 2] > -0.03 && this.vBuffer[3*i + 2] <= 0.03) {
+                this.cBuffer.push(green[0]);
+                this.cBuffer.push(green[1]);
+                this.cBuffer.push(green[2]);
+            } else if(this.vBuffer[3*i + 2] > -0.06 && this.vBuffer[3*i + 2] <= -0.03) {
+                this.cBuffer.push(purple[0]);
+                this.cBuffer.push(purple[1]);
+                this.cBuffer.push(purple[2]);
+            } else {
+                this.cBuffer.push(blue[0]);
+                this.cBuffer.push(blue[1]);
+                this.cBuffer.push(blue[2]);
+            }
+        }
     }
 
     /**
@@ -253,8 +302,8 @@ class Terrain {
             let n_y = Math.sin(rand_n);
 
             // Iterate thru all vertices
-            for(let i = 0; i < this.div; ++i) {
-                for(let j = 0; j < this.div; ++j) {
+            for(let i = 0; i <= this.div; ++i) {
+                for(let j = 0; j <= this.div; ++j) {
                     let v = vec3.create();
                     this.getVertex(v, i, j);
 
@@ -272,9 +321,8 @@ class Terrain {
         }
     }
 
-
     /**
-     * Generate(update) per-vertex normal vectors(Consider different cases!)
+     * Generate(update) per-vertex normal vectors(Iterate vertices-> Bad implementation!! Need to consider different cases)
     */  
     generateNormals() {
         for(let i = 0; i <= this.div; ++i) {
@@ -327,11 +375,11 @@ class Terrain {
         for(let k = 0; k < neighbourNum; ++k) {
             if(k < triangleNum && nbrs[k + 1].index - nbrs[k].index == 1) {
                 let crossProductRes = vec3.create();
-                vec3.cross(crossProductRes, vectorSubList[k], vectorSubList[k + 1]);
+                vec3.cross(crossProductRes, vectorSubList[k + 1], vectorSubList[k]);
                 vec3.add(sum, sum, crossProductRes);
             } else if(k == triangleNum && nbrs[k].index == 5 && nbrs[0].index == 0) {
                 let crossProductRes = vec3.create();
-                vec3.cross(crossProductRes, vectorSubList[k], vectorSubList[0]);
+                vec3.cross(crossProductRes, vectorSubList[0], vectorSubList[k]);
                 vec3.add(sum, sum, crossProductRes);
             }   
         }
@@ -339,8 +387,6 @@ class Terrain {
         let res = vec3.create();
         // Gotta divide in this way, can't sum / triangleNum
         vec3.normalize(res, [sum[0] / triangleNum, sum[1] / triangleNum, sum[2] / triangleNum]);
-
-        // console.log(res[0] + ' ' + res[1] + ' ' + res[2]);
 
         this.nBuffer[3 * ((this.div + 1) * i + j)] = res[0];
         this.nBuffer[3 * ((this.div + 1) * i + j) + 1] = res[1];

@@ -51,7 +51,7 @@ var zNear = 0.1;
 /** @global Far bound of the frustum, can be null or Infinity */
 var zFar = 200;
 /** @global FieldOfView */
-var fov = 45;
+var fov = 36;
 
 //Light parameters
 /** @global Light position in VIEW coordinates */
@@ -68,6 +68,13 @@ var lSpecular =[0,0,0];
 var kAmbient = [1.0,1.0,1.0];
 /** @global Diffuse material color/intensity for Phong reflection */
 var kTerrainDiffuse = [205.0/255.0,163.0/255.0,63.0/255.0];
+
+var pink = [255.0/255.0, 174.0/255.0, 174.0/255.0, 1.0];
+var brown = [85.0/255.0, 65.0/255.0, 36.0/255.0, 1.0];
+var green = [30.0/255.0, 196.0/255.0, 100.0/255.0, 1.0];
+var blue = [33.0/255.0, 107.0/255.0, 214.0/255.0, 1.0];
+var purple = [172.0/255.0, 139.0/255.0, 204.0/255.0];
+
 /** @global Specular material color/intensity for Phong reflection */
 var kSpecular = [0.0,0.0,0.0];
 /** @global Shininess exponent for Phong reflection */
@@ -243,6 +250,9 @@ function setupShaders() {
   shaderProgram.vertexNormalAttribute = gl.getAttribLocation(shaderProgram, "aVertexNormal");
   gl.enableVertexAttribArray(shaderProgram.vertexNormalAttribute);
 
+  shaderProgram.vertexColorAttribute = gl.getAttribLocation(shaderProgram, "aVertexColor");
+  gl.enableVertexAttribArray(shaderProgram.vertexColorAttribute);  
+
   shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
   shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
   shaderProgram.nMatrixUniform = gl.getUniformLocation(shaderProgram, "uNMatrix");
@@ -291,7 +301,7 @@ function setLightUniforms(loc,a,d,s) {
  * Populate buffers with data
  */
 function setupBuffers() {
-    myTerrain = new Terrain(64, -0.64, 0.64, -0.64, 0.64);
+    myTerrain = new Terrain(64, -0.5, 0.5, -0.5, 0.5);
     myTerrain.loadBuffers();
 }
 
@@ -325,16 +335,10 @@ function draw() {
     setMatrixUniforms();
     setLightUniforms(lightPosition,lAmbient,lDiffuse,lSpecular);
     
-    if ((document.getElementById("Blinn-Phong").checked) || (document.getElementById("wirepoly").checked))
+    if ((document.getElementById("polygon").checked))
     { 
       setMaterialUniforms(shininess,kAmbient,kTerrainDiffuse,kSpecular); 
       myTerrain.drawTriangles();
-    }
-    
-    if(document.getElementById("wirepoly").checked)
-    {
-      setMaterialUniforms(shininess,kAmbient,kEdgeBlack,kSpecular);
-      myTerrain.drawEdges();
     }
 
     if(document.getElementById("wireframe").checked)
@@ -356,7 +360,7 @@ function draw() {
   gl = createGLContext(canvas);
   setupShaders();
   setupBuffers();
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clearColor(1.0, 1.0, 1.0, 1.0);
   gl.enable(gl.DEPTH_TEST);
   tick();
 }
