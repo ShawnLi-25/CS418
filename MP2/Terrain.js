@@ -1,6 +1,6 @@
 /**
  * @A simple 3D terrain using WebGL
- * @author Xiang Li
+ * @author Eric Shaffer/Xiang Li 
  */
 
 /** Class implementing 3D terrain. */
@@ -20,13 +20,13 @@ class Terrain {
         this.maxX = maxX;
         this.maxY = maxY;
         
-        // Allocate vertex array  -> len:(div + 1)^2 
+        // Allocate vertex array  -> len:3*(div + 1)^2 
         this.vBuffer = [];
-        // Allocate triangle array  -> len: 2*div^2 
+        // Allocate triangle array  -> len: 6*div^2 
         this.fBuffer = [];
-        // Allocate normal array  -> len:(div + 1)^2
+        // Allocate normal array  -> len:3*(div + 1)^2
         this.nBuffer = [];
-        // Allocate array for color-map -> len:(div + 1)^2
+        // Allocate array for color-map -> len:3*(div + 1)^2
         this.cBuffer = [];
         // Allocate array for edges so we can draw wireframe -> len: 6*div^2 
         this.eBuffer = [];
@@ -38,10 +38,11 @@ class Terrain {
         this.generateLines();
         console.log("Terrain: Generated lines");
 
-        this.generateRandomPlanes(128, 0.005);
+        this.generateRandomPlanes(256, 0.005);
         console.log("Terrain: Generated random planes");
 
-        this.generateNormals();
+        // this.generateNormalsPerFace();
+        this.generateNormalPerVertex()
         console.log("Terrain: Generated normal vectors");
 
         this.setColorMap();
@@ -89,6 +90,16 @@ class Terrain {
         v[2] = this.vBuffer[vid + 2];  
         return true;      
     }
+
+    /**
+    * Return the x,y,z coordinates of a vertex at location idx
+    * @param {idx} idx in vBuffer
+    */
+    getVertexByIdx(v, idx) {
+        v[0] = this.vBuffer[3 * idx]; // x coordinate
+        v[1] = this.vBuffer[3 * idx + 1]; // y coordinate
+        v[2] = this.vBuffer[3 * idx + 2]; // z coordinate
+    }    
 
     /**
     * Calculate vector 
@@ -272,14 +283,14 @@ class Terrain {
         var numTris= this.fBuffer.length/3;
         for(var f = 0; f < numTris; f++)
         {
-            var fid = f*3;
+            var fid = f * 3;
             this.eBuffer.push(this.fBuffer[fid]);
-            this.eBuffer.push(this.fBuffer[fid+1]);
+            this.eBuffer.push(this.fBuffer[fid+ 1 ]);
             
-            this.eBuffer.push(this.fBuffer[fid+1]);
-            this.eBuffer.push(this.fBuffer[fid+2]);
+            this.eBuffer.push(this.fBuffer[fid + 1]);
+            this.eBuffer.push(this.fBuffer[fid + 2]);
             
-            this.eBuffer.push(this.fBuffer[fid+2]);
+            this.eBuffer.push(this.fBuffer[fid + 2]);
             this.eBuffer.push(this.fBuffer[fid]);
         }
         
@@ -322,9 +333,58 @@ class Terrain {
     }
 
     /**
+     * Generate(update) per-face(Triangle) normal vectors(Iterate faces, use fBuffer to indexing)
+    */  
+    generateNormalsPerFace() {
+        for(let i = 0; i < this.numFaces; ++i) {
+            let v1Idx = this.fBuffer[3 * i], v2Idx = this.fBuffer[3 * i + 1], v3Idx = this.fBuffer[3 * i + 2];
+
+            let v1 = vec3.create(), v2 = vec3.create(), v3 = vec3.create();
+            this.getVertexByIdx(v1, v1Idx);
+            this.getVertexByIdx(v2, v2Idx);
+            this.getVertexByIdx(v3, v3Idx);
+
+            vec3.sub(v2, v2, v1);
+            vec3.sub(v3, v3, v1);
+            let crossProduct = vec3.create();
+            vec3.cross(crossProduct, v2, v3);
+
+            this.addNormalVecs([v1Idx, v2Idx, v3Idx], crossProduct);
+        }
+
+        this.normalizeNormalVecs();
+    }
+
+    /**
+    * Perform Accumulation on each normal-vector of a triangle in nBuffer
+    * @param {vIdxs} Vector of 3 vertices inde  
+    * @param {res} Result of normal to accumulate
+    */  
+    addNormalVecs(vIdxs, res) {
+        for(let i = 0; i < vIdxs.length; ++i) {
+            this.nBuffer[3 * vIdxs[i]] += res[0];
+            this.nBuffer[3 * vIdxs[i] + 1] += res[1];
+            this.nBuffer[3 * vIdxs[i] + 2] += res[2];
+        }
+    }
+
+    /**
+     * Perform Normalization for every normal-vectors in nBuffer
+    */  
+    normalizeNormalVecs() {
+        for(let i = 0; i < this.numVertices; ++i) {
+            let normalVal = vec3.fromValues(this.nBuffer[3 * i], this.nBuffer[3 * i + 1], this.nBuffer[3 * i + 2]);
+            vec3.normalize(normalVal, normalVal);
+            this.nBuffer[3 * i] = normalVal[0];
+            this.nBuffer[3 * i + 1] = normalVal[1];
+            this.nBuffer[3 * i + 2] = normalVal[2];
+        }
+    }
+
+    /**
      * Generate(update) per-vertex normal vectors(Iterate vertices-> Bad implementation!! Need to consider different cases)
     */  
-    generateNormals() {
+    generateNormalPerVertex() {
         for(let i = 0; i <= this.div; ++i) {
             for(let j = 0; j <= this.div; ++j) {
                 //At most each vertex can connect to 6 vertices
@@ -343,7 +403,7 @@ class Terrain {
                     }
                 }
 
-                this.computerNormals(verticesPool, i, j);
+                this.computerNormalsPerVertex(verticesPool, i, j);
             }
         }
     }
@@ -354,7 +414,7 @@ class Terrain {
      * @param {number} i the ith row of vertices
      * @param {number} j the jth column of vertices
     */  
-    computerNormals(nbrs, i, j) {
+    computerNormalsPerVertex(nbrs, i, j) {
         let cur = vec3.create();
         this.getVertex(cur, i, j);
 
@@ -386,7 +446,7 @@ class Terrain {
         
         let res = vec3.create();
         // Gotta divide in this way, can't sum / triangleNum
-        vec3.normalize(res, [sum[0] / triangleNum, sum[1] / triangleNum, sum[2] / triangleNum]);
+        vec3.normalize(res, sum);
 
         this.nBuffer[3 * ((this.div + 1) * i + j)] = res[0];
         this.nBuffer[3 * ((this.div + 1) * i + j) + 1] = res[1];

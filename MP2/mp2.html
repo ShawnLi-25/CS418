@@ -1,8 +1,95 @@
 <!DOCTYPE HTML> 
 <html lang="en"> 
 <head>
-<title>Terrain Modeling</title>
-<meta charset="utf-8"> 
+    <title>Terrain Modeling</title>
+    <meta charset="utf-8"> 
+    <style type="text/css">
+
+        /* Adjust form elements */
+        #input_form {
+            display: table;
+            margin: auto;
+        }
+
+        fieldset.inline {
+            vertical-align: top;
+            border: none;
+            display: inline-block;
+            text-align: left;
+        }
+
+        .legend {
+            font: italic bold 30px Georgia, serif;
+        }
+
+        .description {
+            font: bold 18px Helvetica;
+        }
+
+        /* Customized Radio button */
+        .button {
+        display: inline-block;
+        position: relative;
+        left: 50px;
+        padding-left: 35px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        font-size: 18px;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        }
+        
+        /* Hide the browser's default radio button */
+        .button input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+        }
+        
+        /* Create a custom radio button */
+        .checkmark {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 25px;
+        width: 25px;
+        background-color: #eee;
+        border-radius: 50%;
+        }
+        
+        /* On mouse-over, add a grey background color */
+        .button:hover input ~ .checkmark {
+        background-color: #ccc;
+        }
+        
+        .button input:checked ~ .checkmark {
+        background-color: #800080;
+        }
+        
+        /* Create the indicator (the dot/circle - hidden when not checked) */
+        .button:after {
+        content: "";
+        position: absolute;
+        display: none;
+        }
+        
+        /* Show the indicator (dot/circle) when checked */
+        .button input:checked ~ .checkmark:after {
+        display: block;
+        }
+        
+        /* Style the indicator (dot/circle) */
+        .button .checkmark:after {
+        top: 9px;
+        left: 9px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: white;
+        }
+    </style>
 </head>
 
     
@@ -29,7 +116,7 @@
         normalEye = normalize(uNMatrix * aVertexNormal); 
         
         vColor = aVertexColor;
-        gl_Position = uPMatrix*uMVMatrix*vec4(aVertexPosition, 1);
+        gl_Position = uPMatrix*uMVMatrix*vec4(aVertexPosition, 1.0);
     }
 
 </script>
@@ -52,11 +139,17 @@
     uniform vec3 uKSpecular;
     uniform float uShininess;
 
+    uniform float uFogDensity;
+    uniform vec4 uFogColor;
+
     varying vec3 vColor;
 
     void main(void) {
+        const float LOG2 = 1.442695;
+        // float fogDensity = 0.5;
 
         vec4 color = vec4(0.0, 0.0, 0.0, 0.0);
+        // vec4 fogColor = vec4(1.0, 1.0, 1.0, 1.0);
         
         //Use more than one light source 
         for(int i = 0; i < MAX_LIGHTS; ++i) {
@@ -68,8 +161,7 @@
                                             vectorToLightSource), 0.0);
                                                
             // Calculate the reflection vector (r) that is needed for specular light
-            vec3 reflectionVector = normalize(reflect(-vectorToLightSource, 
-                                                     normalEye));
+            vec3 reflectionVector = normalize(reflect(-vectorToLightSource, normalEye));
 
             // The camera in eye coordinates is located in the origin and is pointing
             // along the negative z-axis. Calculate viewVector (v) 
@@ -84,30 +176,87 @@
             float rdotv = max(dot(halfwayVector, normalEye), 0.0);
             
             float specularLightWeightning = pow(rdotv, uShininess);
-            
+
             // Sum up all three reflection components and send to the fragment shader
             color += vec4(((uAmbientLightColor*uKAmbient)
                         + (uDiffuseLightColor*vColor) * diffuseLightWeightning
                         + ((uSpecularLightColor*uKSpecular) * specularLightWeightning)), 0.8);
         }
+
+        float fogCoord = (gl_FragCoord.w/gl_FragCoord.z);    
+
+        float fogFactor = exp2( -uFogDensity * uFogDensity * fogCoord * fogCoord * LOG2 ); 
+        fogFactor = clamp(fogFactor, 0.0, 1.0); 
         
-        gl_FragColor = color;
+        gl_FragColor = mix(color, uFogColor, fogFactor);
     }
 </script>
 
 <script src="gl-matrix-min.js"></script> 
 <script src="webgl-utils.js"></script> 
-<script src="Terrain.js"></script>  
+<script src="terrain.js"></script>  
 <script src="mp2.js"></script>   
 <body onload="startup();">
- <canvas id="terrain" width="800" height="800"></canvas>
+    <div style="text-align: center">
+        <canvas id="terrain" width="800" height="800"></canvas>    
+    </div>
+
     <form id="input_form">
-        <fieldset>
-            <legend>Rendering Parameters</legend>
-         <input type="radio" name="primitive" id="wireframe" value="wireframe"> Wireframe
-         <input type="radio" name="primitive" id="polygon" value="polygon" checked> Polygon 
+        <fieldset class="inline">
+            <legend align="middle">
+                <label class="legend">
+                    Customize your scene!
+                </label>
+            </legend>  
+            <label class="button"> 
+                <label class="description"> Wireframe </label>
+                <input type="radio" name="shading" id="wireframe" value="wireframe">
+                <span class="checkmark"></span>
+            </label>
+            <label class="button"> 
+                <label class="description"> Polygon </label>
+                <input type="radio" name="shading" id="polygon" value="polygon" checked="checked">
+                <span class="checkmark"></span>
+            </label>
+            <br>
+            <label class="button"> 
+                <label class="description"> Normal&emsp;&nbsp;</label>
+                <input type="radio" name="fog" id="nofog" value="nofog">
+                <span class="checkmark"></span>
+            </label>
+            <label class="button"> 
+                <label class="description"> Foggy </label>
+                <input type="radio" name="fog" id="foggy" value="foggy" checked="checked">
+                <span class="checkmark"></span>
+            </label>
         </fieldset>
-        </form>
+        <fieldset class="inline">
+            <legend align="middle">
+                <label class="legend">
+                    Let's make a fly!
+                </label>
+            </legend>  
+            <div>
+                <input type="range" name="roll" id="roll" min="-180" max="180">
+                <label class="description">
+                    &nbsp;Pressing left/right arrow key to roll left/right                
+                </label>
+            </div>
+            <div>
+                <input type="range" name="pitch" id="pitch" min="-180" max="180">                 
+                <label class="description">
+                    &nbsp;Pressing up/down arrow key to pitch up/down
+                </label>
+            </div>
+            <div>
+                <input type="range" name="speed" id="speed" min="-0.05" max="0.05" step="0.001"> 
+                <label class="description">
+                    &nbsp;Pressing +/- key to speed up/slow down
+                </label>
+            </div>
+        </fieldset>
+    </form>
+ 
 </body>
 
 </html>

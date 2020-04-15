@@ -9,6 +9,11 @@ var gl;
 /** @global The HTML5 canvas we draw on */
 var canvas;
 
+var mat4 = glMatrix.mat4;
+var mat3 = glMatrix.mat3;
+var quat = glMatrix.quat;
+var vec3 = glMatrix.vec3;
+
 /** @global A simple GLSL shader program */
 var shaderProgram;
 
@@ -25,7 +30,7 @@ var nMatrix = mat3.create();
 var mvMatrixStack = [];
 
 /** @global The angle of rotation around the y axis */
-var viewRot = 5;
+var viewRot = 10;
 
 /** @global A glmatrix vector to use for transformations */
 var transformVec = vec3.create();    
@@ -39,7 +44,7 @@ var myTerrain;
 
 // View parameters
 /** @global Location of the camera in world coordinates */
-var eyePt = vec3.fromValues(0.0, 0.2, 0.4);
+var eyePt = vec3.fromValues(0.0, 0.1, 0.4);
 /** @global Direction of the view in world coordinates */
 var viewDir = vec3.fromValues(0.0, 0.0, -1.0);
 /** @global Up vector for view matrix creation, in world coordinates */
@@ -72,22 +77,48 @@ var kAmbient = [1.0,1.0,1.0];
 /** @global Diffuse material color/intensity for Phong reflection */
 var kTerrainDiffuse = [205.0/255.0,163.0/255.0,63.0/255.0];
 
-var pink = [255.0/255.0, 174.0/255.0, 174.0/255.0, 1.0];
-var brown = [85.0/255.0, 65.0/255.0, 36.0/255.0, 1.0];
-var green = [30.0/255.0, 196.0/255.0, 100.0/255.0, 1.0];
-var blue = [33.0/255.0, 107.0/255.0, 214.0/255.0, 1.0];
+/** @global (Self-defined) Diffuse material color/intensity to set elevation-based color map for Phong reflection */
+var pink = [255.0/255.0, 174.0/255.0, 174.0/255.0];
+var brown = [85.0/255.0, 65.0/255.0, 36.0/255.0];
+var green = [30.0/255.0, 196.0/255.0, 100.0/255.0];
+var blue = [33.0/255.0, 107.0/255.0, 214.0/255.0];
 var purple = [172.0/255.0, 139.0/255.0, 204.0/255.0];
 
 /** @global Specular material color/intensity for Phong reflection */
 var kSpecular = [0.0,0.0,0.0];
 /** @global Shininess exponent for Phong reflection */
-var shininess = 23;
+var shininess = 28; //When using Blinn-Phong, picking larger shiness exponent? Nothing changes? 
 /** @global Edge color fpr wireframeish rendering */
 var kEdgeBlack = [0.0,0.0,0.0];
 /** @global Edge color for wireframe rendering */
 var kEdgeWhite = [1.0,1.0,1.0];
+/** @global Fog Color */ 
+var fogColor = [1.0, 1.0, 1.0, 1.0];
+/** @global Fog density defines how much of the color is fog (0:all fog, 1:no fog) */ 
+var fogDensity = 0.5;
+/** @global Delta degree add to roll/pitch degree each frame */ 
+var deltaDegree = 0.5;
+/** @global Delta speed add to speedFactor each frame */ 
+var deltaSpeed = 0.001;
 
+/** @global Object acts as entry for different key controls (Replace problematic switch-case) */
+var keys = {};
+keys["ArrowLeft"]  = function() { rollDegree < 180 ? rollDegree += deltaDegree : rollDegree; };
+keys["ArrowRight"] = function() { rollDegree > -180 ? rollDegree -= deltaDegree : rollDegree; };
+keys["ArrowUp"]    = function() { pitchDegree < 180 ? pitchDegree += deltaDegree : pitchDegree; };
+keys["ArrowDown"]  = function() { pitchDegree > -180 ? pitchDegree -= deltaDegree : pitchDegree; };
+keys["Equal"]      = function() { speedFactor < 0.05 ? speedFactor += deltaSpeed : speedFactor; };
+keys["Minus"]      = function() { speedFactor > -0.05 ? speedFactor -= deltaSpeed : speedFactor; };
 
+/** @global Record the state of current pressed-down-key */
+var keyState = keys.NONE;
+
+/** @global Record the state of current pressed-down-key */
+var quaternion = quat.create();
+var speedFactor = 0.001; 
+var rollDegree = 0;
+var pitchDegree = 0;
+var yewDegree = 0;
 
 //-------------------------------------------------------------------------
 /**
@@ -267,6 +298,8 @@ function setupShaders() {
   shaderProgram.uniformAmbientMaterialColorLoc = gl.getUniformLocation(shaderProgram, "uKAmbient");  
   shaderProgram.uniformDiffuseMaterialColorLoc = gl.getUniformLocation(shaderProgram, "uKDiffuse");
   shaderProgram.uniformSpecularMaterialColorLoc = gl.getUniformLocation(shaderProgram, "uKSpecular");
+  shaderProgram.uniformFogColor = gl.getUniformLocation(shaderProgram, "uFogColor");
+  shaderProgram.uniformFogDensity = gl.getUniformLocation(shaderProgram, "uFogDensity");
 }
 
 //-------------------------------------------------------------------------
@@ -301,6 +334,17 @@ function setLightUniforms(loc1, loc2, loc3, a, d, s) {
   gl.uniform3fv(shaderProgram.uniformSpecularLightColorLoc, s);
 }
 
+//-------------------------------------------------------------------------
+/**
+ * Setting fog effect
+ * @param {Float32Array} fogColor
+ * @param {Float32} fogFactor
+ */
+function setFogUniforms(fogColor, fogDensity) {
+  gl.uniform4fv(shaderProgram.uniformFogColor, fogColor);
+  gl.uniform1f(shaderProgram.uniformFogDensity, fogDensity);
+}
+
 //----------------------------------------------------------------------------------
 /**
  * Populate buffers with data
@@ -309,19 +353,72 @@ function setupBuffers() {
     myTerrain = new Terrain(64, -0.5, 0.5, -0.5, 0.5);
     myTerrain.loadBuffers();
 }
+/**
+ * Change degree/speed of flight
+ */
+function setFlyState() {
+  /** Remember in switch-case block, must add break for each case, otherwise all the other cases will run too!! */ 
+
+  if(typeof keys[keyState] == "function") {
+    keys[keyState]();
+  }
+
+  setOrientation(keyState);
+  setMovement();
+
+  // Set for showcase
+  document.getElementById("roll").value = rollDegree;
+  document.getElementById("pitch").value = pitchDegree;
+  document.getElementById("speed").value = speedFactor;
+}
+
+function setOrientation() {
+  // Create a temporary quaterion based on Euler angle
+  let temp = getTempQuat();
+
+  // Update quaternion
+  quat.mul(quaternion, quaternion, temp);
+  vec3.transformQuat(viewDir, viewDir, temp);
+  vec3.transformQuat(up, up, temp);
+}
+
+function getTempQuat() {
+  let temp = quat.create();
+  if (keyState == "ArrowLeft") {
+    quat.fromEuler(temp, 0, 0, -deltaDegree);
+  } else if(keyState == "ArrowRight") {
+    quat.fromEuler(temp, 0, 0, deltaDegree);
+  } else if(keyState == "ArrowUp") {
+    quat.fromEuler(temp, deltaDegree, 0, 0);
+  } else if(keyState == "ArrowDown") {
+    quat.fromEuler(temp, -deltaDegree, 0, 0);
+  }
+
+  return temp;
+}
+
+function setMovement() {
+    let moveVec = vec3.create(); 
+    // Move the camera in the scene
+    vec3.scale(moveVec, viewDir, speedFactor);
+    vec3.add(eyePt, eyePt, moveVec);
+}
 
 //----------------------------------------------------------------------------------
 /**
  * Draw call that applies matrix transformations to model and draws model in frame
  */
 function draw() { 
-    //console.log("function draw()")
     var transformVec = vec3.create();
-  
+    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+
+    // Adjust orientation & flying speed
+    setFlyState();
+    // console.log(keyState, rollDegree, pitchDegree, speedFactor);
+
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     // Perspective Transform 
     mat4.perspective(pMatrix,degToRad(fov), aspect, zNear, zFar);
 
@@ -338,14 +435,24 @@ function draw() {
     mat4.rotateX(mvMatrix, mvMatrix, degToRad(-75));
     setMatrixUniforms();
     setLightUniforms(lightPosition, lightPosition2, lightPosition3, lAmbient, lDiffuse, lSpecular);
+
+    if (document.getElementById("foggy").checked) {
+      fogDensity = 0.5;
+      setFogUniforms(fogColor, fogDensity);
+    } 
+
+    else if (document.getElementById("nofog").checked) {
+      fogDensity = 1.0;
+      setFogUniforms(fogColor, fogDensity);
+    }
     
-    if ((document.getElementById("polygon").checked))
+    if (document.getElementById("polygon").checked)
     { 
       setMaterialUniforms(shininess,kAmbient,kTerrainDiffuse,kSpecular); 
       myTerrain.drawTriangles();
     }
 
-    if(document.getElementById("wireframe").checked)
+    else if (document.getElementById("wireframe").checked)
     {
       setMaterialUniforms(shininess,kAmbient,kEdgeWhite,kSpecular);
       myTerrain.drawEdges();
@@ -361,6 +468,9 @@ function draw() {
  */
  function startup() {
   canvas = document.getElementById("terrain");
+  document.onkeypress = keypress;
+  document.onkeydown = keydown;
+  document.onkeyup = keyup;
   gl = createGLContext(canvas);
   setupShaders();
   setupBuffers();
@@ -378,3 +488,19 @@ function tick() {
     draw();
 }
 
+//----------------------------------------------------------------------------------
+/**
+ * Function for handle DOM event....
+ */
+function keypress(event) {
+  event.preventDefault();  
+  console.log(event.code);
+} 
+
+function keydown(event) {
+  keyState = event.code;
+}
+
+function keyup(event) {
+  keyState = "";
+}
