@@ -69,6 +69,7 @@ class TriMesh{
      * @param {Object} an array object of length 3 to fill win max XYZ coords
      */
     getAABB(minXYZ,maxXYZ){
+        console.assert(minXYZ.length === this.minXYZ.length && maxXYZ.length === this.maxXYZ.length);
         for (var i = 0; i < this.minXYZ.length; i++) {
             minXYZ[i] = this.minXYZ[i];
             maxXYZ[i] = this.maxXYZ[i];
@@ -85,7 +86,7 @@ class TriMesh{
 
         for(let curLine of text) {
             if(curLine[0] === '#') {
-                console.log(curLine.substring(1, curLine.length));
+                console.log("Parse obj file: " + curLine.substring(1, curLine.length));
             } else {
                 // Regular expression to get rid of empty token, first and end empty token too
                 let data = curLine.split(/\b\s+(?!$)/);
@@ -100,7 +101,7 @@ class TriMesh{
                         this.fBuffer.push(parseInt(data[j]) - 1);
                     }
                 } else {
-                    console.log("Obj format error! Found line starting " + curLine[0]);
+                    console.log("Parse obj file format error! Found line starting " + curLine[0]);
                 }
             }
         }
@@ -121,7 +122,6 @@ class TriMesh{
         myMesh.loadBuffers();
         this.isLoaded = true;
     }
-
 
     /**
      * Send the buffer objects to WebGL for rendering

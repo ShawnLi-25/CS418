@@ -5,25 +5,127 @@
 <meta charset="utf-8"> 
 </head>
 
+<style type="text/css">
+
+    canvas {
+        padding: 0;
+        margin: auto;
+        display: block;
+        width: 800px;
+        height: 800px;
+    }
+    /* Adjust form elements */
+    #input_form {
+        display: table;
+        margin: auto;
+    }
+
+    fieldset.fields {
+        vertical-align: top;
+        border: none;
+        display: inline-block;
+        /*text-align: left;*/
+        float:left;
+        width:30%;
+    }
+
+    .legend {
+        font: italic bold 26px Georgia, serif;
+    }
+
+    .description {
+        font: bold 18px Helvetica;
+    }
+
+    /* Customized Radio button */
+    .button {
+        display: inline-block;
+        position: relative;
+        left: 30px;
+        padding-left: 35px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        font-size: 18px;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    /* Hide the browser's default radio button */
+    .button input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    /* Create a custom radio button */
+    .checkmark {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 25px;
+        width: 25px;
+        background-color: #eee;
+        border-radius: 50%;
+    }
+
+    /* On mouse-over, add a grey background color */
+    .button:hover input ~ .checkmark {
+        background-color: #ccc;
+    }
+
+    .button input:checked ~ .checkmark {
+        background-color: #800080;
+    }
+
+    /* Create the indicator (the dot/circle - hidden when not checked) */
+    .button:after {
+        content: "";
+        position: absolute;
+        display: none;
+    }
+
+    /* Show the indicator (dot/circle) when checked */
+    .button input:checked ~ .checkmark:after {
+        display: block;
+    }
+
+    /* Style the indicator (dot/circle) */
+    .button .checkmark:after {
+        top: 9px;
+        left: 9px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: white;
+    }
+</style>
+
 <script id="shader-vs-teapot" type="x-shader/x-vertex">
     attribute vec3 aVertexNormal;
     attribute vec3 aVertexPosition;
-   
+
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
     uniform mat3 uNMatrix;
-    
+    uniform mat4 uMMatrix;
+    uniform mat4 uVMatrix;
+
     uniform vec3 uLightPosition;
     uniform vec3 uAmbientLightColor;
     uniform vec3 uDiffuseLightColor;
     uniform vec3 uSpecularLightColor;
-    
+
     uniform vec3 uKAmbient;
     uniform vec3 uKDiffuse;
     uniform vec3 uKSpecular;
     uniform float uShininess;
     
     varying vec4 vColor;
+
+    varying vec3 v_worldPosition;
+    varying vec3 v_worldNormal;
 
     void main(void) {
     
@@ -62,29 +164,68 @@
                 + ((uSpecularLightColor*uKSpecular) * specularLightWeightning)),1.0);
                 
     gl_Position = uPMatrix*uMVMatrix*vec4(aVertexPosition, 1.0);
-    //vColor=vec4(normalEye,1);
+
+    // Send the view position to the fragment shader
+    v_worldPosition = (uMMatrix * vec4(aVertexPosition, 1.0)).xyz;
+
+    // Orrient the normals and pass to the fragment shader
+    v_worldNormal = normalize(mat3(uMMatrix) * aVertexNormal);
     }
 </script>
   
 <script id="shader-fs-teapot" type="x-shader/x-fragment">
     precision mediump float;
+
+    // Location of the camera in world coordinates
+    uniform vec3 u_worldCameraPosition;
+
+    // Texture
+    uniform samplerCube u_texture;
+
+    // Uniform variable to determine shader Type
+    uniform int u_shaderType;
+
+    varying vec3 v_worldPosition;
+    varying vec3 v_worldNormal;
+
     varying vec4 vColor;
+
     void main(void) {
-            gl_FragColor = vColor;
-     }
+
+        gl_FragColor = vColor;
+        vec3 worldNormal = normalize(v_worldNormal);
+        vec3 eyeToSurfaceDir = normalize(v_worldPosition - u_worldCameraPosition);
+
+        // Set shader type
+        vec3 direction;
+
+        // Switch shader type here
+        if (u_shaderType == 1) {
+          direction = reflect(eyeToSurfaceDir, worldNormal);
+        } else if (u_shaderType == 2) {
+          direction = refract(eyeToSurfaceDir, worldNormal, 0.96);
+        }
+
+        // Set lighting
+        if (u_shaderType == 0) {
+          gl_FragColor = vColor;
+        } else {
+          gl_FragColor = textureCube(u_texture, direction);
+        }
+    }
 </script>
 
 <!-- vertex shader for skybox -->
 <script id="shader-vs-skybox" type="x-shader/x-vertex">
     attribute vec3 a_position;
-    varying vec4 v_position;
+    varying vec3 v_position;
 
     uniform mat4 uVMatrix;
     uniform mat4 uPMatrix;
 
     void main() {
       v_position = a_position;
-      gl_Position = uPMatrix*uVMatrix*vec4(aVertexPosition, 1.0);
+      gl_Position = uPMatrix*uVMatrix*vec4(a_position, 1.0);
     }
 </script>
 
@@ -93,34 +234,81 @@
     precision mediump float;
 
     uniform samplerCube u_skybox;
-    uniform mat4 u_viewDirectionProjectionInverse;
 
-    varying vec4 v_position;
+    varying vec3 v_position;
     void main() {
-      vec4 t = u_viewDirectionProjectionInverse * v_position;
-      gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
+      gl_FragColor = textureCube(u_skybox, v_position);
     }
 </script>
 
 <script src="gl-matrix-min.js"></script> 
 <script src="webgl-utils.js"></script> 
-<script src="TriMesh.js"></script>  
+<script src="TriMesh.js"></script>
+<script src="Skybox.js"></script>
 <script src="mp3.js"></script>
 <body onload="startup();">
- <canvas id="myGLCanvas" width="800" height="800"></canvas>
+ <canvas id="myGLCanvas" width="800" height="800" style=""></canvas>
     <form id="input_form">
-        <fieldset>
-            <legend>Rendering Parameters</legend>
-         <input type="radio" name="primitive" id="wireframe" value="wireframe"> Wireframe
-         <input type="radio" name="primitive" id="polygon" id="polygon" value="polygon" checked> Polygon
-         <input type="radio" name="primitive" id="wirepoly" value="wirepoly" > Polygon with Edges  
+        <fieldset class="fields">
+            <legend align="middle">
+                <label class="legend">
+                    Rendering Parameters
+                </label>
+            </legend>
+            <label class="button">
+                <label class="description"> Polygon </label>
+                <input type="radio" name="render" id="polygon" value="polygon" checked="checked" >
+                <span class="checkmark"></span>
+            </label>
+            <label class="button">
+                <label class="description"> Wireframe </label>
+                <input type="radio" name="render" id="wireframe" value="wireframe">
+                <span class="checkmark"></span>
+            </label>
+            <label class="button">
+                <label class="description"> Polygon with Edges&emsp;&nbsp;</label>
+                <input type="radio" name="render" id="wirepoly" value="wirepoly" >
+                <span class="checkmark"></span>
+            </label>
         </fieldset>
-        <fieldset>
-            <legend>Mesh Pose and Camera Position</legend>
-         <emph>Euler Y:</emph> <input type="number" id="eY" value="0"> Keys A and D <br><br>
-         <emph>Eye Z position:</emph> <input type="number" id="eZ" value="0" > Keys ArrowUp and ArrowDown   
+
+        <fieldset class="fields">
+            <legend align="middle">
+                <label class="legend" style="margin-top: 20px">
+                    Shader Mode
+                </label>
+            </legend>
+            <label class="button">
+                <label class="description"> Phong </label>
+                <input type="radio" name="shader" id="phong" value="phong" checked="checked" >
+                <span class="checkmark"></span>
+            </label>
+            <label class="button">
+                <label class="description"> Reflective </label>
+                <input type="radio" name="shader" id="reflective" value="reflective" >
+                <span class="checkmark"></span>
+            </label>
+            <label class="button">
+                <label class="description"> Refractive&emsp;&nbsp;</label>
+                <input type="radio" name="shader" id="refractive" value="refractive" >
+                <span class="checkmark"></span>
+            </label>
         </fieldset>
-        </form>
+
+        <fieldset class="fields">
+            <legend align="middle">
+                <label class="legend">
+                    Orbit and Rotation
+                </label>
+            </legend>
+         <emph>Euler Y:</emph>
+            <input type="number" id="eY" value="0"><label class="description"><br>
+            <li style="font-family: 'Century Gothic'; font-size: 16px">Use key A/D to rotate around teapot!</li>
+            <li style="font-family: 'Century Gothic'; font-size: 16px">Use ArrowUp/Down to orbit vertically!</li>
+            <li style="font-family: 'Century Gothic'; font-size: 16px">Use ArrowLeft/Right to orbit horizontally!</li>
+        </fieldset>
+
+    </form>
 </body>
 
 </html>

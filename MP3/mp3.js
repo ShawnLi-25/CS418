@@ -19,6 +19,9 @@ var skyboxShaderProgram;
 /** @global The Modelview matrix */
 var mvMatrix = mat4.create();
 
+/** @global The Model matrix */
+var mMatrix = mat4.create();
+
 /** @global The View matrix */
 var vMatrix = mat4.create();
 
@@ -31,8 +34,14 @@ var nMatrix = mat3.create();
 /** @global The matrix stack for hierarchical modeling */
 var mvMatrixStack = [];
 
+/** @global The matrix stack for hierarchical modeling */
+var mMatrixStack = [];
+
 /** @global An object holding the geometry for a 3D mesh */
 var myMesh;
+
+/** @global An object of skybox */
+var mySkyBox;
 
 // View parameters
 /** @global Location of the camera in world coordinates */
@@ -62,21 +71,39 @@ var kTerrainDiffuse = [205.0/255.0,163.0/255.0,63.0/255.0];
 /** @global Specular material color/intensity for Phong reflection */
 var kSpecular = [0.0,0.0,0.0];
 /** @global Shininess exponent for Phong reflection */
-var shininess = 23;
+var shininess = 66;
 /** @global Edge color fpr wireframeish rendering */
 var kEdgeBlack = [0.0,0.0,0.0];
 /** @global Edge color for wireframe rendering */
 var kEdgeWhite = [1.0,1.0,1.0];
 
-//Model parameters
+/** @global Angle of rotation around Y */
 var eulerY = 0;
 
-//Image location
-var imgUrl = 'SanFrancisco/';
+/** @global Image location */
+var imgUrl =  "SanFrancisco/";
 
-//Buffer for vertex position & normal
+/** @global Obj mesh file name */
+var meshName = "teapot.obj";
+
+/** @global Buffer for vertex position & normal */
 var positionBuffer;
 var normalBuffer;
+
+/** @global Texture used for Teapot & Skybox (texture unit 0 here) */
+var texture = 0;
+
+/** @global Shader type (Phong:0, reflective:1, refractive:2) */
+var shaderType = 1;
+
+/** @global Size of skybox */
+var skyboxSize = 50;
+
+/** @global Speed of teapot orbiting */
+var orbitSpeed = 3;
+
+/** @global Speed of teapot rotating */
+var rotateSpeed = 5;
 
 //----------------------- Functions ---------------------------
 /**
@@ -94,18 +121,49 @@ function asyncGetFile(url) {
 }
 
 /**
+ * Sends material information to the shader
+ * @param {Float32} alpha shininess coefficient
+ * @param {Float32Array} a Ambient material color
+ * @param {Float32Array} d Diffuse material color
+ * @param {Float32Array} s Specular material color
+ */
+function setMaterialUniforms(alpha,a,d,s) {
+    gl.useProgram(shaderProgram);
+    gl.uniform1f(shaderProgram.uniformShininessLoc, alpha);
+    gl.uniform3fv(shaderProgram.uniformAmbientMaterialColorLoc, a);
+    gl.uniform3fv(shaderProgram.uniformDiffuseMaterialColorLoc, d);
+    gl.uniform3fv(shaderProgram.uniformSpecularMaterialColorLoc, s);
+}
+
+/**
+ * Sends light information to the shader
+ * @param {Float32Array} loc Location of light source
+ * @param {Float32Array} a Ambient light strength
+ * @param {Float32Array} d Diffuse light strength
+ * @param {Float32Array} s Specular light strength
+ */
+function setLightUniforms(loc,a,d,s) {
+    gl.useProgram(shaderProgram);
+    gl.uniform3fv(shaderProgram.uniformLightPositionLoc, loc);
+    gl.uniform3fv(shaderProgram.uniformAmbientLightColorLoc, a);
+    gl.uniform3fv(shaderProgram.uniformDiffuseLightColorLoc, d);
+    gl.uniform3fv(shaderProgram.uniformSpecularLightColorLoc, s);
+}
+
+/**
  * Sends Modelview matrix to shader
  */
 function uploadModelViewMatrixToShader() {
     gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+    gl.uniformMatrix4fv(shaderProgram.vMatrixUniform, false, vMatrix);
+    gl.uniformMatrix4fv(shaderProgram.mMatrixUniform, false, mMatrix);
 }
 
 /**
  * Sends projection matrix to shader
  */
 function uploadProjectionMatrixToShader() {
-    gl.uniformMatrix4fv(shaderProgram.pMatrixUniform,
-        false, pMatrix);
+    gl.uniformMatrix4fv(shaderProgram.pMatrixUniform,false, pMatrix);
 }
 
 /**
@@ -116,6 +174,14 @@ function uploadNormalMatrixToShader() {
     mat3.transpose(nMatrix,nMatrix);
     mat3.invert(nMatrix,nMatrix);
     gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, nMatrix);
+}
+
+/**
+ * Generates skybox texture to the shader
+ */
+function uploadTextureToShader() {
+    gl.uniform1i(shaderProgram.uniformShaderType, shaderType);
+    gl.uniform1i(shaderProgram.uniformTexture, 0);
 }
 
 /**
@@ -136,11 +202,33 @@ function mvPopMatrix() {
     mvMatrix = mvMatrixStack.pop();
 }
 
+//----------------------------------------------------------------------------------
+/**
+ * Pushes matrix onto model matrix stack
+ */
+function mPushMatrix() {
+    var copy = mat4.clone(mMatrix);
+    mMatrixStack.push(copy);
+}
+
+//----------------------------------------------------------------------------------
+/**
+ * Pops matrix off of model matrix stack
+ */
+function mPopMatrix() {
+    if (mMatrixStack.length == 0) {
+        throw "Invalid popMatrix!";
+    }
+    mMatrix = mMatrixStack.pop();
+}
+
 /**
  * Sends projection/modelview matrices to shader
  */
 function setMatrixUniforms() {
     gl.useProgram(shaderProgram);
+    gl.uniform3fv(shaderProgram.uniformWorldCameraPos, eyePt);
+    uploadTextureToShader();
     uploadModelViewMatrixToShader();
     uploadNormalMatrixToShader();
     uploadProjectionMatrixToShader();
@@ -151,6 +239,7 @@ function setMatrixUniforms() {
  */
 function setSkyboxMatrixUniforms() {
     gl.useProgram(skyboxShaderProgram);
+    gl.uniform1i(skyboxShaderProgram.uniformSkyboxLoc, 0);
     gl.uniformMatrix4fv(skyboxShaderProgram.vMatrixUniform, false, vMatrix);
     gl.uniformMatrix4fv(skyboxShaderProgram.pMatrixUniform, false, pMatrix);
 }
@@ -162,6 +251,14 @@ function setSkyboxMatrixUniforms() {
  */
 function degToRad(degrees) {
     return degrees * Math.PI / 180;
+}
+
+/**
+ * @param {number} value Value to determine whether it is a power of 2
+ * @return {boolean} Boolean of whether value is a power of 2
+ */
+function isPowerOf2(value) {
+    return (value & (value - 1)) == 0;
 }
 
 //----------------------- WebGL Basic --------------------------------------------
@@ -226,122 +323,17 @@ function loadShaderFromDOM(id) {
     gl.shaderSource(shader, shaderSource);
     gl.compileShader(shader);
 
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    var compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS)
+
+    if (!compiled) {
         alert(gl.getShaderInfoLog(shader));
         return null;
     }
+    console.log(id + shader);
     return shader;
 }
 
-//---------------------------- Set up Skybox ------------------------------------------------
-/**
- * Fill the buffer with the values that define a cube.
- * @param {string} id ID string for shader to load. Either vertex shader/fragment shader
- */
-function setGeometry(len = 1) {
-    let radius = len / 2;
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    var positions = new Float32Array(
-        [
-            -0.5, -0.5,  -0.5,
-            -0.5,  0.5,  -0.5,
-            0.5, -0.5,  -0.5,
-            -0.5,  0.5,  -0.5,
-            0.5,  0.5,  -0.5,
-            0.5, -0.5,  -0.5,
-
-            -0.5, -0.5,   0.5,
-            0.5, -0.5,   0.5,
-            -0.5,  0.5,   0.5,
-            -0.5,  0.5,   0.5,
-            0.5, -0.5,   0.5,
-            0.5,  0.5,   0.5,
-
-            -0.5,   0.5, -0.5,
-            -0.5,   0.5,  0.5,
-            0.5,   0.5, -0.5,
-            -0.5,   0.5,  0.5,
-            0.5,   0.5,  0.5,
-            0.5,   0.5, -0.5,
-
-            -0.5,  -0.5, -0.5,
-            0.5,  -0.5, -0.5,
-            -0.5,  -0.5,  0.5,
-            -0.5,  -0.5,  0.5,
-            0.5,  -0.5, -0.5,
-            0.5,  -0.5,  0.5,
-
-            -0.5,  -0.5, -0.5,
-            -0.5,  -0.5,  0.5,
-            -0.5,   0.5, -0.5,
-            -0.5,  -0.5,  0.5,
-            -0.5,   0.5,  0.5,
-            -0.5,   0.5, -0.5,
-
-            0.5,  -0.5, -0.5,
-            0.5,   0.5, -0.5,
-            0.5,  -0.5,  0.5,
-            0.5,  -0.5,  0.5,
-            0.5,   0.5, -0.5,
-            0.5,   0.5,  0.5,
-
-        ]);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-}
-
-// Fill the buffer with normals for cube
-function setNormals() {
-    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-
-    var normals = new Float32Array(
-        [
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0,
-
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0,
-
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0,
-        ]);
-    gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
-}
-
-//-------------------------------------------------------------------------
+//-------------------------- Set up Texture --------------------------------------
 /**
  * Setup texture by loading images for skybox/teapot environment
  */
@@ -397,14 +389,21 @@ function setUpTexture() {
             // Now that the image has loaded upload it to the texture.
             gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
             gl.texImage2D(target, level, internalFormat, format, type, image);
-            gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+            if(isPowerOf2(image.width) && isPowerOf2(image.height)) {
+                gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+            } else {
+                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            }
         });
     });
     gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    console.log("Set Texture Done!!");
 }
 
-//----------------------------------------------------------------------------------
+//--------------------------- Setup Shader -------------------------------------
 /**
  * Setup the fragment and vertex shaders
  */
@@ -436,6 +435,9 @@ function setupShaders() {
     shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
     shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
     shaderProgram.nMatrixUniform = gl.getUniformLocation(shaderProgram, "uNMatrix");
+    shaderProgram.mMatrixUniform = gl.getUniformLocation(shaderProgram, "uMMatrix");
+    shaderProgram.vMatrixUniform = gl.getUniformLocation(shaderProgram, "uVMatrix");
+
     shaderProgram.uniformLightPositionLoc = gl.getUniformLocation(shaderProgram, "uLightPosition");
     shaderProgram.uniformAmbientLightColorLoc = gl.getUniformLocation(shaderProgram, "uAmbientLightColor");
     shaderProgram.uniformDiffuseLightColorLoc = gl.getUniformLocation(shaderProgram, "uDiffuseLightColor");
@@ -444,6 +446,11 @@ function setupShaders() {
     shaderProgram.uniformAmbientMaterialColorLoc = gl.getUniformLocation(shaderProgram, "uKAmbient");
     shaderProgram.uniformDiffuseMaterialColorLoc = gl.getUniformLocation(shaderProgram, "uKDiffuse");
     shaderProgram.uniformSpecularMaterialColorLoc = gl.getUniformLocation(shaderProgram, "uKSpecular");
+
+    shaderProgram.uniformWorldCameraPos = gl.getUniformLocation(shaderProgram, "u_worldCameraPosition");
+    shaderProgram.uniformTexture = gl.getUniformLocation(shaderProgram, "u_texture");
+    shaderProgram.uniformShaderType = gl.getUniformLocation(shaderProgram, "u_shaderType");
+    // shaderProgram.uniformUsePhong = gl.getUniformLocation(shaderProgram, "u_usePhong");
 
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.vertexAttribPointer(
@@ -454,7 +461,6 @@ function setupShaders() {
         shaderProgram.vertexNormalAttribute, 3, gl.FLOAT, false, 0, 0);
 }
 
-//----------------------------------------------------------------------------------
 /**
  * Setup the skybox fragment and vertex shaders
  */
@@ -468,46 +474,19 @@ function setupSkyboxShaders() {
     gl.linkProgram(skyboxShaderProgram);
 
     if (!gl.getProgramParameter(skyboxShaderProgram, gl.LINK_STATUS)) {
+        console.error(gl.getProgramInfoLog(skyboxShaderProgram));
         alert("Failed to setup skybox shaders");
     }
 
     gl.useProgram(skyboxShaderProgram);
 
-    skyboxShaderProgram.vMatrixUniform = gl.getUniformLocation(skyboxShaderProgram, "uVMatrix");
-    skyboxShaderProgram.pMatrixUniform = gl.getUniformLocation(skyboxShaderProgram, "uPMatrix");
-
     skyboxShaderProgram.vertexPositionAttribute = gl.getAttribLocation(skyboxShaderProgram, "a_position");
     gl.enableVertexAttribArray(skyboxShaderProgram.vertexPositionAttribute);
-}
 
-//-------------------------------------------------------------------------
-/**
- * Sends material information to the shader
- * @param {Float32} alpha shininess coefficient
- * @param {Float32Array} a Ambient material color
- * @param {Float32Array} d Diffuse material color
- * @param {Float32Array} s Specular material color
- */
-function setMaterialUniforms(alpha,a,d,s) {
-    gl.uniform1f(shaderProgram.uniformShininessLoc, alpha);
-    gl.uniform3fv(shaderProgram.uniformAmbientMaterialColorLoc, a);
-    gl.uniform3fv(shaderProgram.uniformDiffuseMaterialColorLoc, d);
-    gl.uniform3fv(shaderProgram.uniformSpecularMaterialColorLoc, s);
-}
-
-//-------------------------------------------------------------------------
-/**
- * Sends light information to the shader
- * @param {Float32Array} loc Location of light source
- * @param {Float32Array} a Ambient light strength
- * @param {Float32Array} d Diffuse light strength
- * @param {Float32Array} s Specular light strength
- */
-function setLightUniforms(loc,a,d,s) {
-    gl.uniform3fv(shaderProgram.uniformLightPositionLoc, loc);
-    gl.uniform3fv(shaderProgram.uniformAmbientLightColorLoc, a);
-    gl.uniform3fv(shaderProgram.uniformDiffuseLightColorLoc, d);
-    gl.uniform3fv(shaderProgram.uniformSpecularLightColorLoc, s);
+    skyboxShaderProgram.vMatrixUniform = gl.getUniformLocation(skyboxShaderProgram, "uVMatrix");
+    skyboxShaderProgram.pMatrixUniform = gl.getUniformLocation(skyboxShaderProgram, "uPMatrix");
+    skyboxShaderProgram.uniformSkyboxLoc = gl.getUniformLocation(skyboxShaderProgram, "u_skybox");
+    skyboxShaderProgram.viewDirProjInvMat = gl.getUniformLocation(skyboxShaderProgram, "u_viewDirectionProjectionInverse");
 }
 
 //----------------------------------------------------------------------------------
@@ -527,36 +506,63 @@ function setupMesh(filename) {
     );
 }
 
-//----------------------------------------------------------------------------------
-//Code to handle user interaction
+/**
+ * Initiate SkyBox object
+ */
+function setupSkyBox() {
+    mySkyBox = new Skybox();
+    mySkyBox.createCube(skyboxSize);
+    mySkyBox.loadBuffer();
+}
+
+//---------------------------- Handle user interaction -------------------------------------------
 var currentlyPressedKeys = {};
 
 function handleKeyDown(event) {
     //console.log("Key down ", event.key, " code ", event.code);
     currentlyPressedKeys[event.key] = true;
+
+    // Rotate the teapot
     if (currentlyPressedKeys["a"]) {
-        // key A
-        eulerY-= 1;
+        eulerY = (eulerY - rotateSpeed + 360) % 360;
     } else if (currentlyPressedKeys["d"]) {
-        // key D
-        eulerY+= 1;
+        eulerY = (eulerY + rotateSpeed + 360) % 360;
+    }
+
+    // Orbit the view inside the skybox around the origin
+    if (currentlyPressedKeys["ArrowLeft"]){
+        vec3.rotateY(eyePt, eyePt, viewPt, -degToRad(orbitSpeed));
+    } else if (currentlyPressedKeys["ArrowRight"]){
+        vec3.rotateY(eyePt, eyePt, viewPt, degToRad(orbitSpeed));
     }
 
     if (currentlyPressedKeys["ArrowUp"]){
-        // Up cursor key
         event.preventDefault();
-        eyePt[2]+= 0.01;
+        vec3.rotateX(eyePt, eyePt, viewPt, -degToRad(orbitSpeed));
     } else if (currentlyPressedKeys["ArrowDown"]){
         event.preventDefault();
-        // Down cursor key
-        eyePt[2]-= 0.01;
+        vec3.rotateX(eyePt, eyePt, viewPt, degToRad(orbitSpeed));
     }
-
 }
 
 function handleKeyUp(event) {
     //console.log("Key up ", event.key, " code ", event.code);
     currentlyPressedKeys[event.key] = false;
+}
+
+/**
+ * Switch ShaderType
+ */
+function handleShaderSwitch() {
+    if (document.getElementById("phong").checked) {
+        shaderType = 0;
+    } else if (document.getElementById("reflective").checked) {
+        shaderType = 1;
+    } else if (document.getElementById("refractive").checked) {
+        shaderType = 2;
+    } else {
+        console.error("Unexpected checked shader type!");
+    }
 }
 
 //--------------------------- Main-loop procedure function ---------------------------------------------
@@ -567,12 +573,16 @@ function startup() {
     canvas = document.getElementById("myGLCanvas");
     gl = createGLContext(canvas);
     setupShaders();
-    setupMesh("teapot.obj");
+    setupSkyboxShaders();
 
-    setGeometry();
-    setNormals();
+    setupMesh(meshName);
+    setupSkyBox();
+
     setUpTexture();
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    var cube = getCube(30);
+    skybox = getSkybox(cube);
+
+    gl.clearColor(1.0, 1.0, 1.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
     document.onkeydown = handleKeyDown;
     document.onkeyup = handleKeyUp;
@@ -594,17 +604,20 @@ function draw() {
         0.1, 500.0);
 
     // We want to look down -z, so create a lookat point in that direction
-    vec3.add(viewPt, eyePt, viewDir);
+    // vec3.add(viewPt, eyePt, viewDir);
 
     // Then generate the lookat matrix and initialize the view matrix to that view
     mat4.lookAt(vMatrix,eyePt,viewPt,up);
 
     //Draw Mesh
-    //ADD an if statement to prevent early drawing of myMesh
     if(myMesh.loaded()) {
         mvPushMatrix();
+        mPushMatrix();
+
+        mat4.rotateY(mMatrix, mMatrix, degToRad(eulerY));
         mat4.rotateY(mvMatrix, mvMatrix, degToRad(eulerY));
         mat4.multiply(mvMatrix,vMatrix,mvMatrix);
+
         setMatrixUniforms();
         setLightUniforms(lightPosition,lAmbient,lDiffuse,lSpecular);
 
@@ -628,8 +641,11 @@ function draw() {
                 kEdgeWhite,kSpecular);
             myMesh.drawEdges();
         }
+        // Use skyboxShaderProgram
+        setSkyboxMatrixUniforms();
+        mySkyBox.draw(skyboxShaderProgram);
 
-        gl.drawArrays(gl.TRIANGLES, 0, 6 * 6);
+        mPopMatrix();
         mvPopMatrix();
     }
 }
@@ -638,9 +654,8 @@ function draw() {
  * Update any model transformations
  */
 function animate() {
-    //console.log(eulerX, " ", eulerY, " ", eulerZ);
     document.getElementById("eY").value=eulerY;
-    document.getElementById("eZ").value=eyePt[2];
+    handleShaderSwitch();
 }
 
 /**

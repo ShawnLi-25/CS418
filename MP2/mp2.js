@@ -438,14 +438,14 @@ function draw() {
 
     if (document.getElementById("foggy").checked) {
       fogDensity = 0.5;
-      setFogUniforms(fogColor, fogDensity);
-    } 
+    }
 
     else if (document.getElementById("nofog").checked) {
       fogDensity = 1.0;
-      setFogUniforms(fogColor, fogDensity);
     }
-    
+
+    setFogUniforms(fogColor, fogDensity);
+
     if (document.getElementById("polygon").checked)
     { 
       setMaterialUniforms(shininess,kAmbient,kTerrainDiffuse,kSpecular); 
@@ -458,8 +458,6 @@ function draw() {
       myTerrain.drawEdges();
     }
     mvPopMatrix();
-
-  
 }
 
 //----------------------------------------------------------------------------------
