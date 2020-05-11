@@ -27,7 +27,7 @@
         }
 
         /* Customized Radio button */
-        .button {
+        .radius {
         display: inline-block;
         position: relative;
         left: 50px;
@@ -42,7 +42,7 @@
         }
         
         /* Hide the browser's default radio button */
-        .button input {
+        .radius input {
         position: absolute;
         opacity: 0;
         cursor: pointer;
@@ -60,28 +60,28 @@
         }
         
         /* On mouse-over, add a grey background color */
-        .button:hover input ~ .checkmark {
+        .radius:hover input ~ .checkmark {
         background-color: #ccc;
         }
         
-        .button input:checked ~ .checkmark {
+        .radius input:checked ~ .checkmark {
         background-color: #800080;
         }
         
         /* Create the indicator (the dot/circle - hidden when not checked) */
-        .button:after {
+        .radius:after {
         content: "";
         position: absolute;
         display: none;
         }
         
         /* Show the indicator (dot/circle) when checked */
-        .button input:checked ~ .checkmark:after {
+        .radius input:checked ~ .checkmark:after {
         display: block;
         }
         
         /* Style the indicator (dot/circle) */
-        .button .checkmark:after {
+        .radius .checkmark:after {
         top: 9px;
         left: 9px;
         width: 8px;

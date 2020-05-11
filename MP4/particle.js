@@ -5,10 +5,10 @@
 
 // Limit for particle radius
 const maxRadius = 0.2;
-const minRadius = 0.05;
+const minRadius = 0.15;
 
 // Box size (Limit of position)
-const boxSize = 1;
+const boxSize = 2;
 
 // Box size (Limit of position)
 const maxV = 1;
@@ -23,7 +23,7 @@ var g = -15;
 var d = 0.9;
 
 // Factor affect velocity when collision
-var wallHardness = 0.8;
+var wallHardness = 0.9;
 
 // WebGL requestAnimFrame timeout value (reference webglutil.js)
 const timeout = 1/60;
@@ -49,11 +49,11 @@ class Particle {
         // Initialize timestamp
         this.timestamp = Date.now();
 
-        // Initialize radius
-        var init_radius = this.generateRandomRadius();
-        console.log("Radius is:", init_radius);
+        // Initialize radius value
+        this.radiusVal = this.generateRandomRadius();
+        console.log("Radius is:", this.radiusVal);
         this.radius = vec3.create();
-        vec3.set(this.radius, init_radius, init_radius, init_radius);
+        vec3.set(this.radius, this.radiusVal, this.radiusVal, this.radiusVal);
 
         // Initialize acceleration
         this.accel = vec3.fromValues(0, g, 0);
@@ -73,37 +73,30 @@ class Particle {
     // Euler integration:
     // Vnew = V * d^t + at
     updateVelocity() {
-        console.log("Prev velocity:", this.velocity);
-        vec3.scale(this.velocity, this.velocity, Math.pow(d, timeout));
         const at = vec3.create();
         vec3.scale(at, this.accel, timeout);
+        vec3.scale(this.velocity, this.velocity, Math.pow(d, timeout));
         vec3.add(this.velocity, this.velocity, at);
-        console.log("New velocity:", this.velocity);
     }
 
     // Pnew = P + vt
     updatePosition() {
-        // console.log("Prev position:", this.position);
         let offset = vec3.create();
         vec3.scale(offset, this.velocity, timeout);
         vec3.add(this.position, this.position, offset);
-        // console.log("New position:", this.position);
     }
 
     // Rr = Ri - 2N(Ri * N)
     // Here, Rr = -Ri*wallHardness (when collide on x/y/z wall boundary)
     handleCollision() {
         for (let i = 0; i < this.position.length; ++i) {
-            if (this.position[i] < -boxSize || this.position[i] > boxSize) {
+            console.log(this.position);
+            // console.log(boxSize - this.radius);
+            if (this.position[i] < -(boxSize - this.radiusVal) || this.position[i] > boxSize - this.radiusVal) {
                 console.log("Before collide:", this.velocity);
-                console.log("Collide on", i, "aixs!");
-                this.position[i] = this.position[i] < 0 ? -boxSize : boxSize;
+                this.position[i] = this.position[i] < -(boxSize - this.radiusVal) ? -(boxSize - this.radiusVal) : boxSize - this.radiusVal;
                 this.velocity[i] = -wallHardness * this.velocity[i];
                 console.log("After collide:", this.velocity);
-            }
-            // Only round-up when hitting the floor
-            if(i === 1) {
-                this.handleStop();
             }
         }
     }
@@ -123,6 +116,7 @@ class Particle {
         }
     }
 
+    // Generate random initial radius
     generateRandomRadius() {
         return Math.random() * (maxRadius - minRadius) + minRadius;
     }

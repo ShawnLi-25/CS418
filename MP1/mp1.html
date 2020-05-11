@@ -5,7 +5,7 @@
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 	<style type="text/css">
 		/* Customized Radio button */
-		.button {
+		.radius {
 		display: block;
 		position: relative;
 		left: 160px;
@@ -20,7 +20,7 @@
 		}
 		
 		/* Hide the browser's default radio button */
-		.button input {
+		.radius input {
 		position: absolute;
 		opacity: 0;
 		cursor: pointer;
@@ -38,28 +38,28 @@
 		}
 		
 		/* On mouse-over, add a grey background color */
-		.button:hover input ~ .checkmark {
+		.radius:hover input ~ .checkmark {
 		background-color: #ccc;
 		}
 		
-		.button input:checked ~ .checkmark {
+		.radius input:checked ~ .checkmark {
 		background-color: #800080;
 		}
 		
 		/* Create the indicator (the dot/circle - hidden when not checked) */
-		.button:after {
+		.radius:after {
 		content: "";
 		position: absolute;
 		display: none;
 		}
 		
 		/* Show the indicator (dot/circle) when checked */
-		.button input:checked ~ .checkmark:after {
+		.radius input:checked ~ .checkmark:after {
 		display: block;
 		}
 		
 		/* Style the indicator (dot/circle) */
-		.button .checkmark:after {
+		.radius .checkmark:after {
 		top: 9px;
 		left: 9px;
 		width: 8px;
@@ -99,11 +99,11 @@
 <body onload="startup();">
 	<canvas id="logo" width="500" height="500"></canvas>
 
-<label class="button">Dancing Illinois
+<label class="radius">Dancing Illinois
   <input id="btn_dancing" onclick="switchAnimate(this)" type="radio" checked="checked" name="radio">
   <span class="checkmark"></span>
 </label>
-<label class="button">DIY Animation
+<label class="radius">DIY Animation
   <input id="btn_diy" onclick="switchAnimate(this)" type="radio" name="radio">
   <span class="checkmark"></span>
 </label>

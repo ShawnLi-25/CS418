@@ -15,7 +15,7 @@ var sphereVertexPositionBuffer;
 var sphereVertexNormalBuffer;
 
 // View parameters
-var eyePt = vec3.fromValues(0.5, 0.5, 6.0);
+var eyePt = vec3.fromValues(0.2, 0.05, 7.0);
 var viewDir = vec3.fromValues(0.0, 0.0, -1.0);
 var up = vec3.fromValues(0.0, 1.0, 0.0);
 var viewPt = vec3.fromValues(0.0, 0.0, 0.0);
@@ -152,7 +152,6 @@ function mvPushMatrix() {
     var copy = mat4.clone(mvMatrix);
     mvMatrixStack.push(copy);
 }
-
 
 //----------------------------------------------------------------------------------
 /**
@@ -295,7 +294,6 @@ function setupShaders(vshader, fshader) {
     shaderProgram.uniformShininess = gl.getUniformLocation(shaderProgram, "uShininess");
 }
 
-
 //-------------------------------------------------------------------------
 /**
  * Sends material information to the shader
@@ -355,14 +353,6 @@ function clearParticleList() {
 
 //----------------------------------------------------------------------------------
 /**
- * Set particle's property
- */
-function setParticleProp() {
-    //Todo:?
-}
-
-//----------------------------------------------------------------------------------
-/**
  * Draw call that applies matrix transformations to model and draws model in frame
  */
 function draw() {
@@ -382,16 +372,16 @@ function draw() {
         // console.log("We have ", particleList.length, "particles");
         mvPushMatrix();
 
-        // let delta = particleList[i].updateTimestamp();
-        particleList[i].updatePosition();
+        // Update particle state
         particleList[i].updateVelocity();
+        particleList[i].updatePosition();
         particleList[i].handleCollision();
 
         mat4.translate(mvMatrix, mvMatrix, particleList[i].position);
         mat4.scale(mvMatrix, mvMatrix, particleList[i].radius);
 
         // Get material color
-        colorVal = particleList[i].color;
+        let colorVal = particleList[i].color;
 
         uploadLightsToShader([20, 20, 20], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]);
         uploadMaterialToShader(colorVal, colorVal, [1.0, 1.0, 1.0], shiny);
@@ -419,7 +409,6 @@ function updateParams() {
     }
 }
 
-
 //----------------------------------------------------------------------------------
 /**
  * Startup function called from html code to start program.
@@ -427,7 +416,7 @@ function updateParams() {
 function startup() {
     canvas = document.getElementById("myGLCanvas");
     gl = createGLContext(canvas);
-    setupShaders("shader-phong-vs", "shader-phong-fs");
+    setupShaders("shader-blinn-phong-vs", "shader-blinn-phong-fs");
     setupSphereBuffers();
     addParticles();
     gl.clearColor(0.0, 0.0, 0.0, 0.0);
