@@ -1,2 +1,4 @@
 helper/*
 .idea/*
+.vscode/*
+.DS_Store
